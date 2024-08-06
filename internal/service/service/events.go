@@ -14,21 +14,24 @@ import (
 //go:generate mockgen -destination=mocks/events_mocks.go -package=mocks . EventsRepository
 type EventsRepository interface {
 	Add(ctx context.Context, event domains.Event) (domains.Event, error)
-	List(ctx context.Context, userID int, timeBorderes timeborders.TimeBorders, listParams ListParams) ([]domains.Event, error)
+	List(ctx context.Context, userID int, params ListEventsFilterParams) ([]domains.Event, error)
 	Get(ctx context.Context, id int) (domains.Event, error)
 	GetLatest(ctx context.Context, taskdID int, taskType domains.TaskType) (domains.Event, error)
 	Update(ctx context.Context, event domains.Event) error
 	Delete(ctx context.Context, id int) error
-	ListNotSended(ctx context.Context, till time.Time) ([]domains.Event, error)
-	GetNearest(ctx context.Context) (domains.Event, error)
-	BatchUpdate(ctx context.Context, events []domains.Event) error
 }
 
-func (s *Service) ListEvents(ctx context.Context, userID int, timeBorders timeborders.TimeBorders, listParams ListParams) ([]domains.Event, error) {
+type ListEventsFilterParams struct {
+	TimeBorders timeborders.TimeBorders
+	ListParams  ListParams
+	Tags        []int
+}
+
+func (s *Service) ListEvents(ctx context.Context, userID int, params ListEventsFilterParams) ([]domains.Event, error) {
 	var events []domains.Event
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
 		var err error
-		events, err = s.repo.Events().List(ctx, userID, timeBorders, listParams)
+		events, err = s.repos.events.List(ctx, userID, params)
 		if err != nil {
 			return fmt.Errorf("events: list: %w", err)
 		}
@@ -48,7 +51,7 @@ func (s *Service) GetEvent(ctx context.Context, eventID, userID int) (domains.Ev
 	var event domains.Event
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
 		var err error
-		event, err = s.repo.Events().Get(ctx, eventID)
+		event, err = s.repos.events.Get(ctx, eventID)
 		if err != nil {
 			return fmt.Errorf("events: get: %w", err)
 		}
@@ -74,7 +77,7 @@ func (s *Service) ChangeEventTime(ctx context.Context, eventID int, newTime time
 		return fmt.Errorf("time: %w", serverrors.NewBusinessLogicError("time can't be in the past"))
 	}
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
-		ev, err := s.repo.Events().Get(ctx, eventID)
+		ev, err := s.repos.events.Get(ctx, eventID)
 		if err != nil {
 			return fmt.Errorf("events get: %w", err)
 		}
@@ -85,7 +88,7 @@ func (s *Service) ChangeEventTime(ctx context.Context, eventID int, newTime time
 
 		ev.NextSendTime = newTime
 
-		err = s.repo.Events().Update(ctx, ev)
+		err = s.repos.events.Update(ctx, ev)
 		if err != nil {
 			return fmt.Errorf("events update: %w", err)
 		}
@@ -106,7 +109,7 @@ func (s *Service) ChangeEventTime(ctx context.Context, eventID int, newTime time
 
 func (s *Service) DeleteEvent(ctx context.Context, eventID, userID int) error {
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
-		ev, err := s.repo.Events().Get(ctx, eventID)
+		ev, err := s.repos.events.Get(ctx, eventID)
 		if err != nil {
 			return fmt.Errorf("events get: %w", err)
 		}
@@ -115,7 +118,7 @@ func (s *Service) DeleteEvent(ctx context.Context, eventID, userID int) error {
 			return fmt.Errorf("belongs to: %w", serverrors.NewBusinessLogicError(err.Error()))
 		}
 
-		err = s.repo.Events().Delete(ctx, eventID)
+		err = s.repos.events.Delete(ctx, eventID)
 		if err != nil {
 			return fmt.Errorf("events delete: %w", err)
 		}
@@ -134,7 +137,7 @@ func (s *Service) DeleteEvent(ctx context.Context, eventID, userID int) error {
 
 func (s *Service) ReschedulEventToTime(ctx context.Context, eventID, userID int, t time.Time) error {
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
-		ev, err := s.repo.Events().Get(ctx, eventID)
+		ev, err := s.repos.events.Get(ctx, eventID)
 		if err != nil {
 			return fmt.Errorf("events get: %w", err)
 		}
@@ -145,7 +148,7 @@ func (s *Service) ReschedulEventToTime(ctx context.Context, eventID, userID int,
 
 		ev = ev.RescheuleToTime(t)
 
-		err = s.repo.Events().Update(ctx, ev)
+		err = s.repos.events.Update(ctx, ev)
 		if err != nil {
 			return fmt.Errorf("events update: %w", err)
 		}
@@ -164,7 +167,7 @@ func (s *Service) ReschedulEventToTime(ctx context.Context, eventID, userID int,
 
 func (s *Service) SetEventDoneStatus(ctx context.Context, eventID, userID int, done bool) error {
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
-		event, err := s.repo.Events().Get(ctx, eventID)
+		event, err := s.repos.events.Get(ctx, eventID)
 		if err != nil {
 			return fmt.Errorf("get event: %w", err)
 		}
@@ -175,7 +178,7 @@ func (s *Service) SetEventDoneStatus(ctx context.Context, eventID, userID int, d
 
 		event.Done = done
 
-		err = s.repo.Events().Update(ctx, event)
+		err = s.repos.events.Update(ctx, event)
 		if err != nil {
 			return fmt.Errorf("update event: %w", err)
 		}
@@ -201,7 +204,7 @@ func (s *Service) SetEventDoneStatus(ctx context.Context, eventID, userID int, d
 }
 
 func (s *Service) createAndAddEvent(ctx context.Context, task domains.EventCreator, userID int) error {
-	defParams, err := s.repo.DefaultEventParams().Get(ctx, userID)
+	defParams, err := s.repos.defaultNotificationParams.Get(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("get default params: %w", err)
 	}
@@ -212,7 +215,7 @@ func (s *Service) createAndAddEvent(ctx context.Context, task domains.EventCreat
 	}
 
 	log.Ctx(ctx).Debug("add event", "event", event)
-	event, err = s.repo.Events().Add(ctx, event)
+	event, err = s.repos.events.Add(ctx, event)
 	if err != nil {
 		return fmt.Errorf("add event: %w", err)
 	}

@@ -64,6 +64,15 @@ type BasicTask struct {
 	NotificationParams *domains.NotificationParams `db:"notification_params"`
 }
 
+type BindingAttempt struct {
+	ID             int32            `db:"id"`
+	TgID           int32            `db:"tg_id"`
+	LoginTimestamp pgtype.Timestamp `db:"login_timestamp"`
+	Code           string           `db:"code"`
+	Done           bool             `db:"done"`
+	PasswordHash   string           `db:"password_hash"`
+}
+
 type DefaultUserNotificationParam struct {
 	UserID    int32                      `db:"user_id"`
 	CreatedAt pgtype.Timestamp           `db:"created_at"`
@@ -85,6 +94,11 @@ type Event struct {
 	LastSendedTime     pgtype.Timestamptz         `db:"last_sended_time"`
 }
 
+type KeyValue struct {
+	Key   string `db:"key"`
+	Value []byte `db:"value"`
+}
+
 type PeriodicTask struct {
 	ID                 int32                       `db:"id"`
 	CreatedAt          pgtype.Timestamp            `db:"created_at"`
@@ -97,6 +111,19 @@ type PeriodicTask struct {
 	NotificationParams *domains.NotificationParams `db:"notification_params"`
 }
 
+type SmthToTag struct {
+	SmthID int32 `db:"smth_id"`
+	TagID  int32 `db:"tag_id"`
+	UserID int32 `db:"user_id"`
+}
+
+type Tag struct {
+	ID        int32              `db:"id"`
+	CreatedAt pgtype.Timestamptz `db:"created_at"`
+	Name      string             `db:"name"`
+	UserID    int32              `db:"user_id"`
+}
+
 type TgImage struct {
 	ID       int32  `db:"id"`
 	Filename string `db:"filename"`
@@ -105,9 +132,9 @@ type TgImage struct {
 
 type User struct {
 	ID             int32       `db:"id"`
-	Email          pgtype.Text `db:"email"`
 	PasswordHash   pgtype.Text `db:"password_hash"`
-	TgID           pgtype.Int4 `db:"tg_id"`
+	TgID           int32       `db:"tg_id"`
 	TimezoneOffset int32       `db:"timezone_offset"`
 	TimezoneDst    bool        `db:"timezone_dst"`
+	TgNickname     string      `db:"tg_nickname"`
 }

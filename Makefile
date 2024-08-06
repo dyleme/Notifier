@@ -73,6 +73,11 @@ lint:
 	@$(LINTER) run -v
 
 
+.PHONY: test.build
+test.build:
+	@go build -o test_main ./cmd/timetable/
+	@rm test_main
+
 .PHONY: test
 test:
 	@echo "----------- Test project ----------------"
@@ -99,12 +104,17 @@ docker.push: docker.build
 	docker push dyleme/schedudler
 	
 .PHONY: install
-install: install.generators install.mocks install.linter
+install: install.generators install.mocks install.linter install.tools
 	
 .PHONY: install.generators
 install.generators:
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.26.0 
 	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0
+	
+.PHONY: install.tools
+install.tools:
+	go install github.com/pressly/goose/v3/cmd/goose@v3.21.1
+	go install github.com/daixiang0/gci@v0.13.4
 
 .PHONY: install.linter
 install.linter:

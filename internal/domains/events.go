@@ -47,6 +47,7 @@ type Event struct {
 	FirstSendTime      time.Time
 	Done               bool
 	NotificationParams NotificationParams
+	Tags               []Tag
 }
 
 func (ev Event) BelongsTo(userID int) error {
@@ -57,8 +58,8 @@ func (ev Event) BelongsTo(userID int) error {
 	return NewNotBelongToUserError("event", ev.ID, ev.UserID, userID)
 }
 
-func (ev Event) Rescheule() Event {
-	return ev.RescheuleToTime(time.Now().Add(ev.NotificationParams.Period))
+func (ev Event) Rescheule(now time.Time) Event {
+	return ev.RescheuleToTime(now.Add(ev.NotificationParams.Period))
 }
 
 func (ev Event) RescheuleToTime(t time.Time) Event {
