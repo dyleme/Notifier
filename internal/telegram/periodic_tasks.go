@@ -155,7 +155,7 @@ func durToString(dur time.Duration) string {
 	return strconv.Itoa(int(days))
 }
 
-func (pt *PeriodicTask) Text(loc *time.Location) string {
+func (pt *PeriodicTask) Text() string {
 	var taskStringBuilder strings.Builder
 	taskStringBuilder.WriteString(fmt.Sprintf("Text: %q\n", pt.text))
 	taskStringBuilder.WriteString(fmt.Sprintf("Time: %s\n", pt.timezoneTime))
@@ -167,11 +167,6 @@ func (pt *PeriodicTask) Text(loc *time.Location) string {
 }
 
 func (pt *PeriodicTask) EditMenuMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf("user from ctx: %w", err)
-	}
-
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
 		Row().
 		Button("Set text", nil, onSelectErrorHandling(pt.SetTextMsg)).
@@ -192,11 +187,11 @@ func (pt *PeriodicTask) EditMenuMsg(ctx context.Context, b *bot.Bot, relatedMsgI
 	params := &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      chatID,
 		MessageID:   relatedMsgID,
-		Caption:     pt.Text(user.Location()),
+		Caption:     pt.Text(),
 		ReplyMarkup: kbr,
 	}
 
-	_, err = b.EditMessageCaption(ctx, params)
+	_, err := b.EditMessageCaption(ctx, params)
 	if err != nil {
 		return fmt.Errorf("edit message caption: %w", err)
 	}
@@ -247,17 +242,13 @@ func (pt *PeriodicTask) HandleMsgSetText(ctx context.Context, b *bot.Bot, msg *m
 
 func (pt *PeriodicTask) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
 	op := "SingleTask.SetTimeMsg: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-	caption := pt.Text(user.Location()) + "\n\nEnter time"
+	caption := pt.Text() + "\n\nEnter time"
 
 	pt.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
 		handle:    pt.HandleMsgSetTime,
 		messageID: relatedMsgID,
 	})
-	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err := b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:    chatID,
 		MessageID: relatedMsgID,
 		Caption:   caption,
@@ -272,10 +263,13 @@ func (pt *PeriodicTask) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID
 func (pt *PeriodicTask) HandleMsgSetTime(ctx context.Context, b *bot.Bot, msg *models.Message, relatedMsgID int) error {
 	op := "SingleTask.HandleMsgSetTime: %w"
 
-	pt.timezoneTime.SetClock(msg.Text)
+	err := pt.timezoneTime.SetClock(msg.Text)
+	if err != nil {
+		return fmt.Errorf(op, err)
+	}
 	pt.th.waitingActionsStore.Delete(msg.Chat.ID)
 
-	_, err := b.DeleteMessage(ctx, &bot.DeleteMessageParams{
+	_, err = b.DeleteMessage(ctx, &bot.DeleteMessageParams{
 		ChatID:    msg.Chat.ID,
 		MessageID: msg.ID,
 	})
@@ -293,17 +287,13 @@ func (pt *PeriodicTask) HandleMsgSetTime(ctx context.Context, b *bot.Bot, msg *m
 
 func (pt *PeriodicTask) SetSmallestPeriodMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
 	op := "PeriodicTask.SetSmallestPeriodMsg: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-	caption := pt.Text(user.Location()) + "\n\nEnter smallest amount of days in period"
+	caption := pt.Text() + "\n\nEnter smallest amount of days in period"
 	pt.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
 		handle:    pt.HandleMsgSetSmallestPeriod,
 		messageID: relatedMsgID,
 	})
 
-	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err := b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:    chatID,
 		MessageID: relatedMsgID,
 		Caption:   caption,
@@ -340,17 +330,13 @@ func (pt *PeriodicTask) HandleMsgSetSmallestPeriod(ctx context.Context, b *bot.B
 }
 
 func (pt *PeriodicTask) SetBiggestPeriodMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf("user from ctx: %w", err)
-	}
-	caption := pt.Text(user.Location()) + "\n\nEnter biggest amount of days in period"
+	caption := pt.Text() + "\n\nEnter biggest amount of days in period"
 	pt.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
 		handle:    pt.HandleMsgSetBiggestPeriod,
 		messageID: relatedMsgID,
 	})
 
-	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err := b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:    chatID,
 		MessageID: relatedMsgID,
 		Caption:   caption,
@@ -388,17 +374,13 @@ func (pt *PeriodicTask) HandleMsgSetBiggestPeriod(ctx context.Context, b *bot.Bo
 
 func (pt *PeriodicTask) SetDescription(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
 	op := "SingleTask.SetDescription: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-	caption := pt.Text(user.Location()) + "\n\nEnter description"
+	caption := pt.Text() + "\n\nEnter description"
 
 	pt.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
 		handle:    pt.HandleMsgSetDescription,
 		messageID: relatedMsgID,
 	})
-	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err := b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:    chatID,
 		MessageID: relatedMsgID,
 		Caption:   caption,
@@ -432,12 +414,6 @@ func (pt *PeriodicTask) HandleMsgSetDescription(ctx context.Context, b *bot.Bot,
 	return nil
 }
 
-func computeStartTime(start time.Time, loc *time.Location) time.Duration {
-	t := time.Date(0, 0, 0, start.Hour(), start.Minute(), 0, 0, loc)
-
-	return t.Sub(t.Truncate(timeDay))
-}
-
 func (pt *PeriodicTask) CreateInline(ctx context.Context, b *bot.Bot, msg *models.Message, _ []byte) error {
 	user, err := UserFromCtx(ctx)
 	if err != nil {
@@ -460,7 +436,7 @@ func (pt *PeriodicTask) CreateInline(ctx context.Context, b *bot.Bot, msg *model
 		return fmt.Errorf("create periodic task userID[%v]: %w", user.ID, err)
 	}
 
-	err = pt.th.MainMenuWithText(ctx, b, msg, "Service successfully created:\n"+pt.Text(user.Location()))
+	err = pt.th.MainMenuWithText(ctx, b, msg, "Service successfully created:\n"+pt.Text())
 	if err != nil {
 		return fmt.Errorf("main menu: %w", err)
 	}
@@ -492,7 +468,7 @@ func (pt *PeriodicTask) UpdateInline(ctx context.Context, b *bot.Bot, msg *model
 		return fmt.Errorf(op, err)
 	}
 
-	err = pt.th.MainMenuWithText(ctx, b, msg, "Service successfully updated:\n"+pt.Text(user.Location()))
+	err = pt.th.MainMenuWithText(ctx, b, msg, "Service successfully updated:\n"+pt.Text())
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
@@ -512,7 +488,7 @@ func (pt *PeriodicTask) DeleteInline(ctx context.Context, b *bot.Bot, msg *model
 		return fmt.Errorf(op, err)
 	}
 
-	err = pt.th.MainMenuWithText(ctx, b, msg, "Service successfully deleted:\n"+pt.Text(user.Location()))
+	err = pt.th.MainMenuWithText(ctx, b, msg, "Service successfully deleted:\n"+pt.Text())
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
@@ -552,7 +528,7 @@ func (pt *PeriodicTask) HandleBtnTaskChosen(ctx context.Context, b *bot.Bot, msg
 	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      msg.Chat.ID,
 		MessageID:   msg.ID,
-		Caption:     pt.Text(user.Location()),
+		Caption:     pt.Text(),
 		ReplyMarkup: kbr,
 	})
 	if err != nil {

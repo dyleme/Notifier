@@ -44,6 +44,7 @@ func NewEmpty(loc *time.Location) *Time {
 
 func New(date time.Time, clock time.Duration, loc *time.Location) *Time {
 	t := date.Add(clock).In(loc)
+
 	return &Time{
 		clock: t.Format(timeDoublePointsFormat),
 		date:  t.Format(dayPointWithYearFormat),
@@ -53,6 +54,7 @@ func New(date time.Time, clock time.Duration, loc *time.Location) *Time {
 
 func NewFromTime(t time.Time, loc *time.Location) *Time {
 	t = t.In(loc)
+
 	return &Time{
 		clock: t.Format(timeDoublePointsFormat),
 		date:  t.Format(dayPointWithYearFormat),

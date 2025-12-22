@@ -182,6 +182,10 @@ func (n *Notification) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID 
 
 func (n *Notification) HandleMsgSetTime(ctx context.Context, b *bot.Bot, msg *models.Message, relatedMsgID int) error {
 	err := n.timezoneTime.SetClock(msg.Text)
+	if err != nil {
+		return fmt.Errorf("set clock: %w", err)
+	}
+
 	n.th.waitingActionsStore.Delete(msg.Chat.ID)
 
 	_, err = b.DeleteMessage(ctx, &bot.DeleteMessageParams{

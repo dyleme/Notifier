@@ -127,7 +127,7 @@ func (ev *Event) HandleBtnChosen(ctx context.Context, b *bot.Bot, msg *models.Me
 	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      msg.Chat.ID,
 		MessageID:   msg.ID,
-		Caption:     ev.Text(user.Location()),
+		Caption:     ev.Text(),
 		ReplyMarkup: kbr,
 	})
 	if err != nil {
@@ -138,12 +138,6 @@ func (ev *Event) HandleBtnChosen(ctx context.Context, b *bot.Bot, msg *models.Me
 }
 
 func (ev *Event) EditMenuMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
-	op := "SingleTask.EditMenuMsg: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
 		Row().
 		Button("Set time", nil, onSelectErrorHandling(ev.SetTimeMsg)).
@@ -155,19 +149,19 @@ func (ev *Event) EditMenuMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, 
 	params := &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      chatID,
 		MessageID:   relatedMsgID,
-		Caption:     ev.Text(user.Location()),
+		Caption:     ev.Text(),
 		ReplyMarkup: kbr,
 	}
 
-	_, err = b.EditMessageCaption(ctx, params)
+	_, err := b.EditMessageCaption(ctx, params)
 	if err != nil {
-		return fmt.Errorf(op, err)
+		return fmt.Errorf("edit message: %w", err)
 	}
 
 	return nil
 }
 
-func (ev *Event) Text(loc *time.Location) string {
+func (ev *Event) Text() string {
 	dateStr := ev.timezoneTime.DateString()
 	timeStr := ev.timezoneTime.ClockString()
 
@@ -180,17 +174,13 @@ func (ev *Event) Text(loc *time.Location) string {
 }
 
 func (ev *Event) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf("user from ctx: %w", err)
-	}
-	caption := ev.Text(user.Location()) + "\n\nEnter time"
+	caption := ev.Text() + "\n\nEnter time"
 
 	ev.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
 		handle:    ev.HandleMsgSetTime,
 		messageID: relatedMsgID,
 	})
-	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err := b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:    chatID,
 		MessageID: relatedMsgID,
 		Caption:   caption,
@@ -232,7 +222,7 @@ func (ev *Event) SetDateMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, c
 	if err != nil {
 		return fmt.Errorf("user from ctx: %w", err)
 	}
-	caption := ev.Text(user.Location()) + "\n\nEnter date (it can bt or one of provided, or you can type your own date)"
+	caption := ev.Text() + "\n\nEnter date (it can bt or one of provided, or you can type your own date)"
 	nowStr := timezone.TodayDateString(user.Location())
 	tomorrowStr := timezone.TomorrowDateString(user.Location())
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
@@ -300,17 +290,12 @@ func (ev *Event) handleSetDate(ctx context.Context, b *bot.Bot, chatID int64, ms
 }
 
 func (ev *Event) UpdateInline(ctx context.Context, b *bot.Bot, msg *models.Message, _ []byte) error {
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf("update inline: user from ctx: %w", err)
-	}
-
-	err = ev.th.serv.ChangeEventTime(ctx, ev.sendingID, ev.timezoneTime.Time())
+	err := ev.th.serv.ChangeEventTime(ctx, ev.sendingID, ev.timezoneTime.Time())
 	if err != nil {
 		return fmt.Errorf("change event time: %w", err)
 	}
 
-	err = ev.th.MainMenuWithText(ctx, b, msg, "Event successfully updated:\n"+ev.Text(user.Location()))
+	err = ev.th.MainMenuWithText(ctx, b, msg, "Event successfully updated:\n"+ev.Text())
 	if err != nil {
 		return fmt.Errorf("main menu with text: %w", err)
 	}
@@ -319,17 +304,12 @@ func (ev *Event) UpdateInline(ctx context.Context, b *bot.Bot, msg *models.Messa
 }
 
 func (ev *Event) DeleteInline(ctx context.Context, b *bot.Bot, msg *models.Message, _ []byte) error {
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf("user from ctx: %w", err)
-	}
-
-	err = ev.th.serv.DeleteSending(ctx, ev.sendingID)
+	err := ev.th.serv.DeleteSending(ctx, ev.sendingID)
 	if err != nil {
 		return fmt.Errorf("delete inline: delete event: %w", err)
 	}
 
-	err = ev.th.MainMenuWithText(ctx, b, msg, "Service successfully deleted:\n"+ev.Text(user.Location()))
+	err = ev.th.MainMenuWithText(ctx, b, msg, "Service successfully deleted:\n"+ev.Text())
 	if err != nil {
 		return fmt.Errorf("delete inline: main menu with text: %w", err)
 	}

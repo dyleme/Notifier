@@ -79,6 +79,7 @@ func (t TgImagesRepository) Get(ctx context.Context, filename string) (domain.Tg
 
 			return domain.TgImage{}, fmt.Errorf("get tg image: %w", err)
 		}
+
 		return domain.TgImage{
 			Filename: tgImage.Filename,
 			TgFileID: tgImage.TgFileID,

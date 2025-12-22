@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Dyleme/timecache"
+
 	"github.com/dyleme/notifier/internal/domain/apperr"
 )
 
@@ -33,7 +34,7 @@ func (gc *Generic[T]) Get(_ context.Context, key string) (T, error) {
 	return obj, nil
 }
 
-func (gc *Generic[I]) Put(ctx context.Context, key string, obj I) error {
+func (gc *Generic[I]) Put(_ context.Context, key string, obj I) error {
 	gc.cache.StoreDefDur(key, obj)
 
 	return nil

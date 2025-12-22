@@ -37,7 +37,7 @@ func TestTimezoneTime_SetClockSetDate(t *testing.T) {
 			expectedDate:  time.Date(2025, 11, 15, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:          "occuring in previous day",
+			name:          "occurring in previous day",
 			settedClock:   "01:00",
 			settedDate:    "15.11.2025",
 			tz:            time.FixedZone("UTC+3", 3*60*60),
@@ -46,7 +46,7 @@ func TestTimezoneTime_SetClockSetDate(t *testing.T) {
 			expectedDate:  time.Date(2025, 11, 14, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:          "occuring in next day",
+			name:          "occurring in next day",
 			settedClock:   "22:00",
 			settedDate:    "15.11.2025",
 			tz:            time.FixedZone("UTC-3", -3*60*60),
