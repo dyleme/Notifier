@@ -10,9 +10,9 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	serverrors "github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/internal/domain"
+	serverrors "github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 func chatID(update *models.Update) int64 {

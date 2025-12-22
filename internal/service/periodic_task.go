@@ -6,15 +6,14 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/pkg/log"
-	"github.com/dyleme/Notifier/pkg/utils/slice"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/pkg/log"
+	"github.com/dyleme/notifier/pkg/utils/slice"
 )
 
 func (s *Service) CreatePeriodicTask(ctx context.Context, perTask domain.PeriodicTask) error {
-	log.Ctx(ctx).Debug("creating periodic task", slog.Any("periodic task", perTask))
-
 	createdEvent := perTask.NewSending(time.Now())
+	log.Ctx(ctx).Debug("creating periodic task", slog.Any("periodic task", perTask), slog.Any("event", createdEvent))
 
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
 		return s.addTask(ctx, perTask.BuildTask(), createdEvent)

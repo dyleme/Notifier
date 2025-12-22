@@ -21,7 +21,7 @@ SELECT *
 FROM tasks
 WHERE user_id = ?
   AND type = ?
-ORDER BY id DESC
+ORDER BY id
 LIMIT ? OFFSET ?;
 
 -- name: CountListSingleTasks :one

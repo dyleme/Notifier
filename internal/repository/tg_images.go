@@ -10,25 +10,21 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/internal/repository/queries/goqueries"
-	"github.com/dyleme/Notifier/pkg/database/txmanager"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/repository/queries/goqueries"
+	"github.com/dyleme/notifier/pkg/database/txmanager"
 )
 
 type TgImagesRepository struct {
 	q      *goqueries.Queries
-	cache  Cache
 	getter *txmanager.Getter
+	cache  TgImageCache
 }
 
-type Cache interface {
-	Get(key string, obj any) error
-	Delete(key string) error
-	Add(key string, obj any) error
-}
+type TgImageCache GenericCache[domain.TgImage]
 
-func NewTGImagesRepository(getter *txmanager.Getter, cache Cache) *TgImagesRepository {
+func NewTGImagesRepository(getter *txmanager.Getter, cache TgImageCache) *TgImagesRepository {
 	return &TgImagesRepository{
 		q:      goqueries.New(),
 		cache:  cache,
@@ -36,15 +32,11 @@ func NewTGImagesRepository(getter *txmanager.Getter, cache Cache) *TgImagesRepos
 	}
 }
 
-func newTgImageKey(filename string) string {
-	return "tg_images_filename=" + filename
-}
-
 func (t TgImagesRepository) Add(ctx context.Context, filename, tgFileID string) error {
 	op := "TgImagesRepository.Add: %w"
 
 	tx := t.getter.GetTx(ctx)
-	tgImage, err := t.q.AddTgImage(ctx, tx, goqueries.AddTgImageParams{
+	_, err := t.q.AddTgImage(ctx, tx, goqueries.AddTgImageParams{
 		Filename: filename,
 		TgFileID: tgFileID,
 	})
@@ -53,10 +45,6 @@ func (t TgImagesRepository) Add(ctx context.Context, filename, tgFileID string) 
 			return fmt.Errorf(op, apperr.UniqueError{Name: intersection, Value: filename})
 		}
 
-		return fmt.Errorf(op, err)
-	}
-
-	if err = t.cache.Add(newTgImageKey(filename), tgImage); err != nil {
 		return fmt.Errorf(op, err)
 	}
 
@@ -81,32 +69,25 @@ func uniqueError(err error, columnNames []string) (string, bool) {
 }
 
 func (t TgImagesRepository) Get(ctx context.Context, filename string) (domain.TgImage, error) {
-	op := "TgImagesRepository.Get: %w"
+	image, err := t.cache.Wrap(ctx, filename, func() (domain.TgImage, error) {
+		tx := t.getter.GetTx(ctx)
+		tgImage, err := t.q.GetTgImage(ctx, tx, filename)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return domain.TgImage{}, apperr.ErrNotFound
+			}
 
-	var tgImage goqueries.TgImage
-	if err := t.cache.Get(newTgImageKey(filename), &tgImage); err == nil { // err == nil
-		return dtoTgImage(tgImage), nil
-	}
-
-	tx := t.getter.GetTx(ctx)
-	tgImage, err := t.q.GetTgImage(ctx, tx, filename)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return domain.TgImage{}, apperr.ErrNotFound
+			return domain.TgImage{}, fmt.Errorf("get tg image: %w", err)
 		}
 
-		return domain.TgImage{}, fmt.Errorf(op, err)
+		return domain.TgImage{
+			Filename: tgImage.Filename,
+			TgFileID: tgImage.TgFileID,
+		}, nil
+	})
+	if err != nil {
+		return domain.TgImage{}, err
 	}
 
-	return domain.TgImage{
-		Filename: tgImage.Filename,
-		TgFileID: tgImage.TgFileID,
-	}, nil
-}
-
-func dtoTgImage(tgImage goqueries.TgImage) domain.TgImage {
-	return domain.TgImage{
-		Filename: tgImage.Filename,
-		TgFileID: tgImage.TgFileID,
-	}
+	return image, nil
 }

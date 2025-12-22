@@ -92,9 +92,9 @@ test:
 .PHONY: format
 format:
 	@echo "----------- gci ----------------"
-	gci write cmd --skip-generated -s standard -s default -s prefix\(github.com/dyleme/Notifier\) -s blank -s dot --custom-order
-	gci write internal --skip-generated -s standard -s default -s prefix\(github.com/dyleme/Notifier\) -s blank -s dot --custom-order
-	gci write pkg --skip-generated -s standard -s default -s prefix\(github.com/dyleme/Notifier\) -s blank -s dot --custom-order
+	gci write cmd --skip-generated -s standard -s default -s prefix\(github.com/dyleme/notifier\) -s blank -s dot --custom-order
+	gci write internal --skip-generated -s standard -s default -s prefix\(github.com/dyleme/notifier\) -s blank -s dot --custom-order
+	gci write pkg --skip-generated -s standard -s default -s prefix\(github.com/dyleme/notifier\) -s blank -s dot --custom-order
 	@echo "----------- gofumpt ----------------"
 	gofumpt -w cmd
 	gofumpt -w internal
@@ -130,4 +130,6 @@ install.linter:
 install.mocks:
 	go install go.uber.org/mock/mockgen@v0.4.0
 
-
+.PHONY: run
+run:
+	@TZ=utc go run ./cmd/timetable/main.go

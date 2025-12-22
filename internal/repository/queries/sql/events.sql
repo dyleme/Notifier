@@ -18,7 +18,7 @@ WHERE user_id=?
   AND next_sending >= @from_time
   AND next_sending <= @to_time
   AND done = false
-ORDER BY next_sending DESC
+ORDER BY next_sending ASC
 LIMIT ? OFFSET ?;
 
 

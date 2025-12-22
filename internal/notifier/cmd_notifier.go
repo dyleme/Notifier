@@ -3,8 +3,8 @@ package notifier
 import (
 	"context"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 type CmdNotifier struct{}

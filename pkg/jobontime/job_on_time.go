@@ -7,7 +7,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 type JobInTime struct {

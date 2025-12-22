@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/pkg/log"
-	"github.com/dyleme/Notifier/pkg/model"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/pkg/log"
+	"github.com/dyleme/notifier/pkg/model"
 )
 
 //go:generate mockgen -destination=mocks/events_mocks.go -package=mocks . EventsRepository
@@ -35,7 +34,6 @@ func (s *Service) ListEvents(ctx context.Context, userID int, params ListEventsF
 	var events []domain.Event
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
 		var err error
-		log.Ctx(ctx).Debug("args", slog.Any("arg", params))
 		events, err = s.repos.events.List(ctx, userID, params)
 		if err != nil {
 			return fmt.Errorf("list: %w", err)
@@ -121,7 +119,7 @@ func (s *Service) ReschedulSendingToTime(ctx context.Context, sendingID int, t t
 
 		err = s.repos.events.UpdateSending(ctx, sending)
 		if err != nil {
-			return fmt.Errorf("events update: %w", err)
+			return fmt.Errorf("sending update: %w", err)
 		}
 
 		return nil

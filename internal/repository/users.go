@@ -5,24 +5,29 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/internal/repository/queries/goqueries"
-	"github.com/dyleme/Notifier/pkg/database/sqlconv"
-	"github.com/dyleme/Notifier/pkg/database/txmanager"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/repository/queries/goqueries"
+	"github.com/dyleme/notifier/pkg/database/sqlconv"
+	"github.com/dyleme/notifier/pkg/database/txmanager"
 )
 
 type UsersRepository struct {
+	cache  UserCache
 	q      *goqueries.Queries
 	getter *txmanager.Getter
 }
 
-func NewUserRepository(getter *txmanager.Getter) *UsersRepository {
+type UserCache GenericCache[domain.User]
+
+func NewUserRepository(getter *txmanager.Getter, cache UserCache) *UsersRepository {
 	return &UsersRepository{
 		q:      goqueries.New(),
 		getter: getter,
+		cache:  cache,
 	}
 }
 
@@ -52,32 +57,45 @@ func (r *UsersRepository) Create(ctx context.Context, user domain.User) (domain.
 }
 
 func (r *UsersRepository) Get(ctx context.Context, id int) (domain.User, error) {
-	tx := r.getter.GetTx(ctx)
-	dbUser, err := r.q.GetUser(ctx, tx, int64(id))
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return domain.User{}, apperr.ErrNotFound
+	user, err := r.cache.Wrap(ctx, "userid:"+strconv.Itoa(id), func() (domain.User, error) {
+		tx := r.getter.GetTx(ctx)
+		dbUser, err := r.q.GetUser(ctx, tx, int64(id))
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return domain.User{}, apperr.ErrNotFound
+			}
+
+			return domain.User{}, fmt.Errorf("find user: %w", err)
 		}
 
-		return domain.User{}, fmt.Errorf("find user: %w", err)
+		return r.dto(dbUser), nil
+	})
+	if err != nil {
+		return domain.User{}, err
 	}
 
-	return r.dto(dbUser), nil
+	return user, nil
 }
 
 func (r *UsersRepository) GetByTgID(ctx context.Context, tgID int) (domain.User, error) {
-	op := "Repository.Find: %w"
-	tx := r.getter.GetTx(ctx)
-	dbUser, err := r.q.GetUserByTgID(ctx, tx, int64(tgID))
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return domain.User{}, fmt.Errorf(op, apperr.ErrNotFound)
+	user, err := r.cache.Wrap(ctx, "tguserid:"+strconv.Itoa(tgID), func() (domain.User, error) {
+		tx := r.getter.GetTx(ctx)
+		dbUser, err := r.q.GetUserByTgID(ctx, tx, int64(tgID))
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return domain.User{}, err
+			}
+
+			return domain.User{}, err
 		}
 
-		return domain.User{}, fmt.Errorf(op, err)
+		return r.dto(dbUser), nil
+	})
+	if err != nil {
+		return domain.User{}, err
 	}
 
-	return r.dto(dbUser), nil
+	return user, nil
 }
 
 func (r *UsersRepository) Update(ctx context.Context, user domain.User) error {

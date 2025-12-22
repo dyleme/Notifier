@@ -4,15 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/pkg/log"
-	"github.com/dyleme/Notifier/pkg/utils/slice"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/pkg/log"
+	"github.com/dyleme/notifier/pkg/utils/slice"
 )
 
 func (s *Service) CreateSingleTask(ctx context.Context, singleTask domain.SingleTask) error {
-	log.Ctx(ctx).Debug("creating single task", "single task", singleTask)
-
 	createdEvent := singleTask.NewEvent()
+	log.Ctx(ctx).Debug("creating single task", "single task", singleTask, "event", createdEvent)
 
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
 		return s.addTask(ctx, singleTask.BuildTask(), createdEvent)

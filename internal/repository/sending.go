@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/internal/repository/queries/goqueries"
-	"github.com/dyleme/Notifier/pkg/database/sqlconv"
-	"github.com/dyleme/Notifier/pkg/utils/slice"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/repository/queries/goqueries"
+	"github.com/dyleme/notifier/pkg/database/sqlconv"
+	"github.com/dyleme/notifier/pkg/utils/slice"
 )
 
 func (r *EventsRepository) dto(dbEv goqueries.Event) domain.Event {

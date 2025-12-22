@@ -5,23 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	inKbr "github.com/go-telegram/ui/keyboard/inline"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	serverrors "github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/internal/domain"
+	serverrors "github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/telegram/timezone"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 type Notification struct {
-	th        *Handler
-	done      bool
-	sendingID int
-	message   string
-	notifTime time.Time
+	th           *Handler
+	done         bool
+	sendingID    int
+	message      string
+	timezoneTime *timezone.Time
 }
 
 func sendingKey(sendingID int) string {
@@ -59,11 +59,11 @@ func (th *Handler) Notify(ctx context.Context, notif domain.Event) error {
 		return fmt.Errorf("get user info[tgID=%v]: %w", notif.TgID, err)
 	}
 	n := Notification{
-		th:        th,
-		done:      false,
-		sendingID: notif.SendingID,
-		message:   notif.Text,
-		notifTime: notif.NextSending,
+		th:           th,
+		done:         false,
+		sendingID:    notif.SendingID,
+		message:      notif.Text,
+		timezoneTime: timezone.NewFromTime(notif.NextSending, user.Location()),
 	}
 	err = n.sendMessage(ctx, user)
 	if err != nil {
@@ -77,7 +77,7 @@ func (n *Notification) sendMessage(ctx context.Context, user domain.User) error 
 	kb := inKbr.New(n.th.bot, inKbr.NoDeleteAfterClick()).
 		Button("Done", nil, errorHandling(n.setDone)).
 		Button("Reschedule", nil, onSelectErrorHandling(n.SetTimeMsg))
-	text := n.message + " " + n.notifTime.In(user.Location()).Format(dayTimeFormat)
+	text := n.message + " " + n.timezoneTime.String()
 	msg, err := n.th.bot.SendMessage(ctx, &bot.SendMessageParams{ //nolint:exhaustruct //no need to specify
 		ChatID:      user.TGID,
 		Text:        text,
@@ -158,7 +158,7 @@ func (n *Notification) SendDone(ctx context.Context, b *bot.Bot, msg *models.Mes
 }
 
 func (n *Notification) String() string {
-	return n.message + "\n" + n.notifTime.Format(dayTimeFormat)
+	return n.message + "\n" + n.timezoneTime.String()
 }
 
 func (n *Notification) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
@@ -181,17 +181,11 @@ func (n *Notification) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID 
 }
 
 func (n *Notification) HandleMsgSetTime(ctx context.Context, b *bot.Bot, msg *models.Message, relatedMsgID int) error {
-	user, err := UserFromCtx(ctx)
+	err := n.timezoneTime.SetClock(msg.Text)
 	if err != nil {
-		return fmt.Errorf("hanle msg set time: user from ctx: %w", err)
+		return fmt.Errorf("set clock: %w", err)
 	}
 
-	t, err := parseTime(msg.Text, user.Location())
-	if err != nil {
-		return fmt.Errorf("hanle msg set time: parse time: %w", err)
-	}
-	durFromDayStart := t.Sub(t.Truncate(timeDay))
-	n.notifTime = n.notifTime.Truncate(timeDay).Add(durFromDayStart)
 	n.th.waitingActionsStore.Delete(msg.Chat.ID)
 
 	_, err = b.DeleteMessage(ctx, &bot.DeleteMessageParams{
@@ -217,10 +211,8 @@ func (n *Notification) SetDateMsg(ctx context.Context, b *bot.Bot, relatedMsgID 
 		return fmt.Errorf(op, err)
 	}
 	text := n.String() + "\n\nEnter date (it can be either one of provided, or you can type your own date)"
-	now := time.Now().In(user.Location())
-	nowStr := now.Format(dayPointFormat)
-	tomorrow := time.Now().Add(timeDay).In(user.Location())
-	tomorrowStr := tomorrow.Format(dayPointFormat)
+	nowStr := timezone.TodayDateString(user.Location())
+	tomorrowStr := timezone.TomorrowDateString(user.Location())
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
 		Row().Button(nowStr, []byte(nowStr), errorHandling(n.HandleBtnSetDate)).
 		Row().Button(tomorrowStr, []byte(tomorrowStr), errorHandling(n.HandleBtnSetDate))
@@ -268,12 +260,10 @@ func (n *Notification) HandleMsgSetDate(ctx context.Context, b *bot.Bot, msg *mo
 }
 
 func (n *Notification) handleSetDate(ctx context.Context, b *bot.Bot, chatID int64, msgID int, dateStr string) error {
-	t, err := parseDate(dateStr)
+	err := n.timezoneTime.SetDate(dateStr)
 	if err != nil {
-		return fmt.Errorf("parse date: %w", err)
+		return fmt.Errorf("set date: %w", err)
 	}
-	hmTime := n.notifTime.Sub(n.notifTime.Truncate(timeDay))
-	n.notifTime = t.Add(hmTime)
 
 	n.th.waitingActionsStore.Delete(chatID)
 
@@ -286,7 +276,7 @@ func (n *Notification) handleSetDate(ctx context.Context, b *bot.Bot, chatID int
 }
 
 func (n *Notification) Reschedule(ctx context.Context, b *bot.Bot, msgID int, chatID int64) error {
-	err := n.th.serv.ReschedulSendingToTime(ctx, n.sendingID, n.notifTime)
+	err := n.th.serv.ReschedulSendingToTime(ctx, n.sendingID, n.timezoneTime.Time())
 	if err != nil {
 		return fmt.Errorf("reschedule event: %w", err)
 	}

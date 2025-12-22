@@ -2,13 +2,12 @@ package telegram
 
 import (
 	"context"
-	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
-	"github.com/dyleme/Notifier/internal/service"
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/internal/service"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 const (
@@ -18,56 +17,6 @@ const (
 var defaultListParams = service.ListParams{
 	Offset: 0,
 	Limit:  defaultListLimit,
-}
-
-const (
-	timeDoublePointsFormat = "15:04"
-	timeSpaceFormat        = "15 04"
-
-	dayPointFormat         = "02.01"
-	daySpaceFormat         = "02 01"
-	dayPointWithYearFormat = "02.01.2006"
-	daySpaceWithYearFormat = "02 01 2006"
-
-	dayTimeFormat = "02.01.2006 15:04"
-)
-const timeDay = 24 * time.Hour
-
-var timeFormats = []string{timeDoublePointsFormat, timeSpaceFormat}
-
-func parseTime(dayString string, loc *time.Location) (time.Time, error) {
-	for _, format := range timeFormats {
-		t, err := time.ParseInLocation(format, dayString, loc)
-		if err == nil { // err eq nil
-			return t, nil
-		}
-	}
-
-	return time.Time{}, ErrCantParseMessage
-}
-
-var dayFormats = []string{dayPointFormat, daySpaceFormat, dayPointWithYearFormat, daySpaceWithYearFormat}
-
-func parseDate(dayString string) (time.Time, error) {
-	for _, format := range dayFormats {
-		t, err := time.Parse(format, dayString)
-		if err != nil {
-			continue
-		}
-
-		if t.Year() != 0 {
-			return t, nil
-		}
-
-		t = t.AddDate(time.Now().Year(), 0, 0)
-		if t.Before(time.Now().Add(-2 * timeDay)) {
-			t = t.AddDate(1, 0, 0)
-		}
-
-		return t, nil
-	}
-
-	return time.Time{}, ErrCantParseMessage
 }
 
 func onSelectErrorHandling(

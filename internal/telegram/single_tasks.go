@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +13,9 @@ import (
 	"github.com/go-telegram/bot/models"
 	inKbr "github.com/go-telegram/ui/keyboard/inline"
 
-	"github.com/dyleme/Notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/telegram/timezone"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 var ErrCantParseMessage = errors.New("cant parse message")
@@ -20,14 +23,19 @@ var ErrCantParseMessage = errors.New("cant parse message")
 func (th *Handler) TasksMenuInline(ctx context.Context, b *bot.Bot, mes *models.Message, _ []byte) error {
 	op := "TelegramHandler.TasksMenuInline: %w"
 
+	user, err := UserFromCtx(ctx)
+	if err != nil {
+		return fmt.Errorf(op, err)
+	}
+
 	listTasks := ListTasks{th: th}
-	createTasks := NewTaskCreation(th, true)
+	createTasks := NewTaskCreation(th, user.Location(), true)
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
 		Row().Button("List tasks", nil, errorHandling(listTasks.listInline)).
 		Row().Button("Create task", nil, onSelectErrorHandling(createTasks.SetTextMsg)).
 		Row().Button("Cancel", nil, errorHandling(th.MainMenuInline))
 
-	_, err := th.bot.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err = th.bot.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      mes.Chat.ID,
 		MessageID:   mes.ID,
 		Caption:     "Tasks actions",
@@ -95,26 +103,24 @@ func (l *ListTasks) listInline(ctx context.Context, b *bot.Bot, mes *models.Mess
 
 const notSettedID = -1
 
-func NewTaskCreation(th *Handler, isWorkflow bool) SingleTask {
+func NewTaskCreation(th *Handler, loc *time.Location, isWorkflow bool) SingleTask {
 	return SingleTask{
-		id:          notSettedID,
-		th:          th,
-		text:        "",
-		description: "",
-		date:        time.Time{},
-		time:        time.Time{},
-		isWorkflow:  isWorkflow,
+		id:           notSettedID,
+		th:           th,
+		text:         "",
+		description:  "",
+		timezoneTime: timezone.NewEmpty(loc),
+		isWorkflow:   isWorkflow,
 	}
 }
 
 type SingleTask struct {
-	th          *Handler
-	id          int
-	text        string
-	date        time.Time
-	time        time.Time
-	description string
-	isWorkflow  bool
+	th           *Handler
+	id           int
+	text         string
+	timezoneTime *timezone.Time
+	description  string
+	isWorkflow   bool
 }
 
 func (bt *SingleTask) next(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64,
@@ -140,25 +146,11 @@ func (bt *SingleTask) isCreation() bool {
 	return bt.id == notSettedID
 }
 
-func (bt *SingleTask) Text(loc *time.Location) string {
-	var (
-		dateStr string
-		timeStr string
-	)
-
-	if !bt.date.IsZero() {
-		userDate := bt.date.In(loc)
-		dateStr = userDate.Format(dayPointWithYearFormat)
-	}
-	if !bt.time.IsZero() {
-		userTime := bt.time.In(loc)
-		timeStr = userTime.Format(timeDoublePointsFormat)
-	}
-
+func (bt *SingleTask) Text() string {
 	var taskStringBuilder strings.Builder
 	taskStringBuilder.WriteString(fmt.Sprintf("Text: %q\n", bt.text))
-	taskStringBuilder.WriteString(fmt.Sprintf("Date: %s\n", dateStr))
-	taskStringBuilder.WriteString(fmt.Sprintf("Time: %s\n", timeStr))
+	taskStringBuilder.WriteString(fmt.Sprintf("Date: %s\n", bt.timezoneTime.DateString()))
+	taskStringBuilder.WriteString(fmt.Sprintf("Time: %s\n", bt.timezoneTime.ClockString()))
 	taskStringBuilder.WriteString(fmt.Sprintf("Description: %s\n", bt.description))
 
 	return taskStringBuilder.String()
@@ -166,10 +158,6 @@ func (bt *SingleTask) Text(loc *time.Location) string {
 
 func (bt *SingleTask) EditMenuMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
 	op := "SingleTask.EditMenuMsg: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
 
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
 		Row().
@@ -190,11 +178,11 @@ func (bt *SingleTask) EditMenuMsg(ctx context.Context, b *bot.Bot, relatedMsgID 
 	params := &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      chatID,
 		MessageID:   relatedMsgID,
-		Caption:     bt.Text(user.Location()),
+		Caption:     bt.Text(),
 		ReplyMarkup: kbr,
 	}
 
-	_, err = b.EditMessageCaption(ctx, params)
+	_, err := b.EditMessageCaption(ctx, params)
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
@@ -249,13 +237,11 @@ func (bt *SingleTask) SetDateMsg(ctx context.Context, b *bot.Bot, relatedMsgID i
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
-	caption := bt.Text(user.Location()) + "\n\nEnter date (it can bt or one of provided, or you can type your own date)"
-	now := time.Now().In(user.Location())
-	nowStr := now.Format(dayPointFormat)
-	tomorrow := time.Now().Add(timeDay).In(user.Location())
-	tomorrowStr := tomorrow.Format(dayPointFormat)
+	caption := bt.Text() + "\n\nEnter date (it can bt or one of provided, or you can type your own date)"
+	todayStr := timezone.TodayDateString(user.Location())
+	tomorrowStr := timezone.TomorrowDateString(user.Location())
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
-		Row().Button(nowStr, []byte(nowStr), errorHandling(bt.HandleBtnSetDate)).
+		Row().Button(todayStr, []byte(todayStr), errorHandling(bt.HandleBtnSetDate)).
 		Row().Button(tomorrowStr, []byte(tomorrowStr), errorHandling(bt.HandleBtnSetDate))
 
 	bt.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
@@ -307,11 +293,10 @@ func (bt *SingleTask) HandleMsgSetDate(ctx context.Context, b *bot.Bot, msg *mod
 func (bt *SingleTask) handleSetDate(ctx context.Context, b *bot.Bot, chatID int64, msgID int, dateStr string) error {
 	op := "SingleTask.handleSetDate: %w"
 
-	t, err := parseDate(dateStr)
+	err := bt.timezoneTime.SetDate(dateStr)
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
-	bt.date = t
 
 	bt.th.waitingActionsStore.Delete(chatID)
 
@@ -325,17 +310,13 @@ func (bt *SingleTask) handleSetDate(ctx context.Context, b *bot.Bot, chatID int6
 
 func (bt *SingleTask) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
 	op := "SingleTask.SetTimeMsg: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-	caption := bt.Text(user.Location()) + "\n\nEnter time"
+	caption := bt.Text() + "\n\nEnter time"
 
 	bt.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
 		handle:    bt.HandleMsgSetTime,
 		messageID: relatedMsgID,
 	})
-	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err := b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:    chatID,
 		MessageID: relatedMsgID,
 		Caption:   caption,
@@ -349,16 +330,12 @@ func (bt *SingleTask) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID i
 
 func (bt *SingleTask) HandleMsgSetTime(ctx context.Context, b *bot.Bot, msg *models.Message, relatedMsgID int) error {
 	op := "SingleTask.HandleMsgSetTime: %w"
-	user, err := UserFromCtx(ctx)
+
+	err := bt.timezoneTime.SetClock(msg.Text)
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
 
-	t, err := parseTime(msg.Text, user.Location())
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-	bt.time = t
 	bt.th.waitingActionsStore.Delete(msg.Chat.ID)
 
 	_, err = b.DeleteMessage(ctx, &bot.DeleteMessageParams{
@@ -380,17 +357,13 @@ func (bt *SingleTask) HandleMsgSetTime(ctx context.Context, b *bot.Bot, msg *mod
 
 func (bt *SingleTask) SetDescription(ctx context.Context, b *bot.Bot, relatedMsgID int, chatID int64) error {
 	op := "SingleTask.SetDescription: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-	caption := bt.Text(user.Location()) + "\n\nEnter description"
+	caption := bt.Text() + "\n\nEnter description"
 
 	bt.th.waitingActionsStore.StoreDefDur(chatID, TextMessageHandler{
 		handle:    bt.HandleMsgSetDescription,
 		messageID: relatedMsgID,
 	})
-	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err := b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:    chatID,
 		MessageID: relatedMsgID,
 		Caption:   caption,
@@ -432,25 +405,35 @@ func (bt *SingleTask) CreateInline(ctx context.Context, b *bot.Bot, msg *models.
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
-	t := bt.date.Add(bt.time.Sub(bt.time.Truncate(timeDay)))
 
-	if t.Before(time.Now()) {
+	if bt.timezoneTime.Time().Before(time.Now()) {
 		return fmt.Errorf(op, ErrTimeInPast)
 	}
 
-	task := domain.NewSingleTask(domain.TaskCreationParams{
-		Text:        bt.text,
-		Description: bt.description,
-		UserID:      user.ID,
-		Start:       computeStartTime(t, user.Location()),
-	}, bt.date)
+	task := domain.NewSingleTask(
+		domain.TaskCreationParams{
+			Text:        bt.text,
+			Description: bt.description,
+			UserID:      user.ID,
+			Start:       bt.timezoneTime.Clock(),
+		},
+		bt.timezoneTime.Date(),
+	)
+
+	log.Ctx(ctx).Debug("single task creation",
+		slog.Any("task", task),
+		slog.Any("timezone_time", bt.timezoneTime),
+		slog.String("timezone_time_clock", bt.timezoneTime.Clock().String()),
+		slog.Time("timezone_time_date", bt.timezoneTime.Date()),
+		slog.Int("user_id", user.ID),
+	)
 
 	err = bt.th.serv.CreateSingleTask(ctx, task)
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
 
-	err = bt.th.MainMenuWithText(ctx, b, msg, "Service successfully created:\n"+bt.Text(user.Location()))
+	err = bt.th.MainMenuWithText(ctx, b, msg, "Service successfully created:\n"+bt.Text())
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
@@ -465,22 +448,34 @@ func (bt *SingleTask) UpdateInline(ctx context.Context, b *bot.Bot, msg *models.
 		return fmt.Errorf(op, err)
 	}
 
-	t := bt.date.Add(bt.time.Sub(bt.time.Truncate(timeDay)))
+	if bt.timezoneTime.Time().Before(time.Now()) {
+		return fmt.Errorf(op, ErrTimeInPast)
+	}
 
-	task := domain.NewSingleTask(domain.TaskCreationParams{
-		ID:          bt.id,
-		Text:        bt.text,
-		Description: bt.description,
-		UserID:      user.ID,
-		Start:       computeStartTime(t, user.Location()),
-	}, bt.date)
+	task := domain.NewSingleTask(
+		domain.TaskCreationParams{
+			ID:          bt.id,
+			Text:        bt.text,
+			Description: bt.description,
+			UserID:      user.ID,
+			Start:       bt.timezoneTime.Clock(),
+		}, bt.timezoneTime.Date(),
+	)
+
+	log.Ctx(ctx).Debug("single task update",
+		slog.Any("task", task),
+		slog.Any("timezone_time", bt.timezoneTime),
+		slog.String("timezone_time_clock", bt.timezoneTime.Clock().String()),
+		slog.Time("timezone_time_date", bt.timezoneTime.Date()),
+		slog.Int("user_id", user.ID),
+	)
 
 	err = bt.th.serv.UpdateSingleTask(ctx, task, user.ID)
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
 
-	err = bt.th.MainMenuWithText(ctx, b, msg, "Service successfully updated:\n"+bt.Text(user.Location()))
+	err = bt.th.MainMenuWithText(ctx, b, msg, "Service successfully updated:\n"+bt.Text())
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
@@ -500,7 +495,7 @@ func (bt *SingleTask) DeleteInline(ctx context.Context, b *bot.Bot, msg *models.
 		return fmt.Errorf(op, err)
 	}
 
-	err = bt.th.MainMenuWithText(ctx, b, msg, "Service successfully deleted:\n"+bt.Text(user.Location()))
+	err = bt.th.MainMenuWithText(ctx, b, msg, "Service successfully deleted:\n"+bt.Text())
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
@@ -526,8 +521,7 @@ func (bt *SingleTask) HandleBtnTaskChosen(ctx context.Context, b *bot.Bot, msg *
 	}
 
 	bt.id = task.ID
-	bt.date = task.Date
-	bt.time = time.Time{}.Add(task.Start)
+	bt.timezoneTime = timezone.New(task.Date, task.Start, user.Location())
 	bt.text = task.Text
 	bt.description = task.Description
 	bt.isWorkflow = false
@@ -540,7 +534,7 @@ func (bt *SingleTask) HandleBtnTaskChosen(ctx context.Context, b *bot.Bot, msg *
 	_, err = b.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      msg.Chat.ID,
 		MessageID:   msg.ID,
-		Caption:     bt.Text(user.Location()),
+		Caption:     bt.Text(),
 		ReplyMarkup: kbr,
 	})
 	if err != nil {
