@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/pkg/log"
-	"github.com/dyleme/Notifier/pkg/model"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/pkg/log"
+	"github.com/dyleme/notifier/pkg/model"
 )
 
 //go:generate mockgen -destination=mocks/events_mocks.go -package=mocks . EventsRepository

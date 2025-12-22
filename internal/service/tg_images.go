@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
 )
 
 //go:generate mockgen -destination=mocks/tg_images_mocks.go -package=mocks . TgImagesRepository

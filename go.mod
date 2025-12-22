@@ -1,4 +1,4 @@
-module github.com/dyleme/Notifier
+module github.com/dyleme/notifier
 
 go 1.23.0
 

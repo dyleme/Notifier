@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 //go:generate mockgen -destination=mocks/basic_tasks_mocks.go -package=mocks . TaskRepository

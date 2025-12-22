@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Dyleme/timecache"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/domain/apperr"
 )
 
 type Generic[T any] struct {

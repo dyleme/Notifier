@@ -13,9 +13,9 @@ import (
 	"github.com/go-telegram/bot/models"
 	inKbr "github.com/go-telegram/ui/keyboard/inline"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/telegram/timezone"
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/telegram/timezone"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 var ErrCantParseMessage = errors.New("cant parse message")

@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	"github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/internal/repository/queries/goqueries"
-	"github.com/dyleme/Notifier/pkg/database/sqlconv"
-	"github.com/dyleme/Notifier/pkg/database/txmanager"
+	"github.com/dyleme/notifier/internal/domain"
+	"github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/repository/queries/goqueries"
+	"github.com/dyleme/notifier/pkg/database/sqlconv"
+	"github.com/dyleme/notifier/pkg/database/txmanager"
 )
 
 type UsersRepository struct {

@@ -10,10 +10,10 @@ import (
 	"github.com/go-telegram/bot/models"
 	inKbr "github.com/go-telegram/ui/keyboard/inline"
 
-	"github.com/dyleme/Notifier/internal/domain"
-	serverrors "github.com/dyleme/Notifier/internal/domain/apperr"
-	"github.com/dyleme/Notifier/internal/telegram/timezone"
-	"github.com/dyleme/Notifier/pkg/log"
+	"github.com/dyleme/notifier/internal/domain"
+	serverrors "github.com/dyleme/notifier/internal/domain/apperr"
+	"github.com/dyleme/notifier/internal/telegram/timezone"
+	"github.com/dyleme/notifier/pkg/log"
 )
 
 type Notification struct {
