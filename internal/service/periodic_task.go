@@ -12,9 +12,8 @@ import (
 )
 
 func (s *Service) CreatePeriodicTask(ctx context.Context, perTask domain.PeriodicTask) error {
-	log.Ctx(ctx).Debug("creating periodic task", slog.Any("periodic task", perTask))
-
 	createdEvent := perTask.NewSending(time.Now())
+	log.Ctx(ctx).Debug("creating periodic task", slog.Any("periodic task", perTask), slog.Any("event", createdEvent))
 
 	err := s.tr.Do(ctx, func(ctx context.Context) error {
 		return s.addTask(ctx, perTask.BuildTask(), createdEvent)

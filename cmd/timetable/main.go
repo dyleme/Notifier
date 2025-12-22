@@ -12,8 +12,10 @@ import (
 	"github.com/benbjohnson/clock"
 
 	"github.com/dyleme/Notifier/internal/config"
+	"github.com/dyleme/Notifier/internal/domain"
 	"github.com/dyleme/Notifier/internal/notifier/eventnotifier"
 	"github.com/dyleme/Notifier/internal/repository"
+	"github.com/dyleme/Notifier/internal/repository/cache"
 	"github.com/dyleme/Notifier/internal/service"
 	"github.com/dyleme/Notifier/internal/telegram"
 	"github.com/dyleme/Notifier/pkg/database/sqldatabase"
@@ -53,7 +55,6 @@ func main() { //nolint:funlen // main can be long
 	}
 	closeFuncs = append(closeFuncs, closeDB)
 
-	cache := repository.NewUniversalCache()
 	txManager, txGetter := txmanager.New(db, txmanager.WithLogging(log.Ctx, txmanager.LoggingSetting{
 		LogLevel:   slog.LevelDebug,
 		ErrorLevel: slog.LevelError,
@@ -65,12 +66,10 @@ func main() { //nolint:funlen // main can be long
 		eventsNotifier,
 		cfg.NotifierJob.CheckTasksPeriod,
 	)
-	userRepo := repository.NewUserRepository(txGetter)
-
 	svc := service.New(
-		userRepo,
+		repository.NewUserRepository(txGetter, cache.NewGeneric[domain.User]()),
 		repository.NewTasksRepository(txGetter),
-		repository.NewTGImagesRepository(txGetter, cache),
+		repository.NewTGImagesRepository(txGetter, cache.NewGeneric[domain.TgImage]()),
 		repository.NewEventsRepository(txGetter),
 		txManager,
 		eventsNotifierJob,

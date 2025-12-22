@@ -130,4 +130,6 @@ install.linter:
 install.mocks:
 	go install go.uber.org/mock/mockgen@v0.4.0
 
-
+.PHONY: run
+run:
+	@TZ=utc go run ./cmd/timetable/main.go

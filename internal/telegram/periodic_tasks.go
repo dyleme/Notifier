@@ -12,19 +12,24 @@ import (
 	inKbr "github.com/go-telegram/ui/keyboard/inline"
 
 	"github.com/dyleme/Notifier/internal/domain"
+	"github.com/dyleme/Notifier/internal/telegram/timezone"
 )
 
 func (th *Handler) PeriodicTasksMenuInline(ctx context.Context, b *bot.Bot, mes *models.Message, _ []byte) error {
 	op := "TelegramHandler.TasksMenuInline: %w"
+	user, err := UserFromCtx(ctx)
+	if err != nil {
+		return fmt.Errorf(op, err)
+	}
 
 	listTasks := ListPeriodicTasks{th: th}
-	createTasks := NewPeriodicTaskCreation(th, true)
+	createTasks := NewPeriodicTaskCreation(th, user.Location(), true)
 	kbr := inKbr.New(b, inKbr.NoDeleteAfterClick()).
 		Row().Button("List periodic tasks", nil, errorHandling(listTasks.listInline)).
 		Row().Button("Create periodic task", nil, onSelectErrorHandling(createTasks.SetTextMsg)).
 		Row().Button("Cancel", nil, errorHandling(th.MainMenuInline))
 
-	_, err := th.bot.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
+	_, err = th.bot.EditMessageCaption(ctx, &bot.EditMessageCaptionParams{ //nolint:exhaustruct //no need to fill
 		ChatID:      mes.Chat.ID,
 		MessageID:   mes.ID,
 		Caption:     "Periodic tasks actions",
@@ -90,7 +95,7 @@ func (l *ListPeriodicTasks) listInline(ctx context.Context, b *bot.Bot, mes *mod
 	return nil
 }
 
-func NewPeriodicTaskCreation(th *Handler, isWorkflow bool) PeriodicTask {
+func NewPeriodicTaskCreation(th *Handler, loc *time.Location, isWorkflow bool) PeriodicTask {
 	return PeriodicTask{
 		id:             notSettedID,
 		th:             th,
@@ -98,7 +103,7 @@ func NewPeriodicTaskCreation(th *Handler, isWorkflow bool) PeriodicTask {
 		description:    "",
 		smallestPeriod: 0,
 		biggestPeriod:  0,
-		time:           time.Time{},
+		timezoneTime:   timezone.NewEmpty(loc),
 		isWorkflow:     isWorkflow,
 	}
 }
@@ -109,7 +114,7 @@ type PeriodicTask struct {
 	text           string
 	smallestPeriod time.Duration
 	biggestPeriod  time.Duration
-	time           time.Time
+	timezoneTime   *timezone.Time
 	description    string
 	isWorkflow     bool
 }
@@ -137,6 +142,10 @@ func (pt *PeriodicTask) isCreation() bool {
 	return pt.id == notSettedID
 }
 
+const (
+	timeDay = 24 * time.Hour
+)
+
 func durToString(dur time.Duration) string {
 	days := dur / timeDay
 	if days == 0 {
@@ -147,20 +156,9 @@ func durToString(dur time.Duration) string {
 }
 
 func (pt *PeriodicTask) Text(loc *time.Location) string {
-	var (
-		dateStr string
-		timeStr string
-	)
-
-	if !pt.time.IsZero() {
-		userTime := pt.time.In(loc)
-		timeStr = userTime.Format(timeDoublePointsFormat)
-	}
-
 	var taskStringBuilder strings.Builder
 	taskStringBuilder.WriteString(fmt.Sprintf("Text: %q\n", pt.text))
-	taskStringBuilder.WriteString(fmt.Sprintf("Date: %s\n", dateStr))
-	taskStringBuilder.WriteString(fmt.Sprintf("Time: %s\n", timeStr))
+	taskStringBuilder.WriteString(fmt.Sprintf("Time: %s\n", pt.timezoneTime))
 	taskStringBuilder.WriteString(fmt.Sprintf("Smallest period: %v\n", durToString(pt.smallestPeriod)))
 	taskStringBuilder.WriteString(fmt.Sprintf("Biggest period: %v\n", durToString(pt.biggestPeriod)))
 	taskStringBuilder.WriteString(fmt.Sprintf("Description: %s\n", pt.description))
@@ -273,27 +271,17 @@ func (pt *PeriodicTask) SetTimeMsg(ctx context.Context, b *bot.Bot, relatedMsgID
 
 func (pt *PeriodicTask) HandleMsgSetTime(ctx context.Context, b *bot.Bot, msg *models.Message, relatedMsgID int) error {
 	op := "SingleTask.HandleMsgSetTime: %w"
-	user, err := UserFromCtx(ctx)
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
 
-	t, err := parseTime(msg.Text, user.Location())
-	if err != nil {
-		return fmt.Errorf(op, err)
-	}
-	pt.time = t
+	pt.timezoneTime.SetClock(msg.Text)
 	pt.th.waitingActionsStore.Delete(msg.Chat.ID)
 
-	_, err = b.DeleteMessage(ctx, &bot.DeleteMessageParams{
+	_, err := b.DeleteMessage(ctx, &bot.DeleteMessageParams{
 		ChatID:    msg.Chat.ID,
 		MessageID: msg.ID,
 	})
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
-
-	pt.isWorkflow = false
 
 	err = pt.next(ctx, b, relatedMsgID, msg.Chat.ID, pt.SetSmallestPeriodMsg)
 	if err != nil {
@@ -461,7 +449,7 @@ func (pt *PeriodicTask) CreateInline(ctx context.Context, b *bot.Bot, msg *model
 			Text:        pt.text,
 			Description: pt.description,
 			UserID:      user.ID,
-			Start:       computeStartTime(pt.time, user.Location()),
+			Start:       pt.timezoneTime.Clock(),
 		},
 		pt.smallestPeriod,
 		pt.biggestPeriod,
@@ -493,7 +481,7 @@ func (pt *PeriodicTask) UpdateInline(ctx context.Context, b *bot.Bot, msg *model
 			Text:        pt.text,
 			Description: pt.description,
 			UserID:      user.ID,
-			Start:       computeStartTime(pt.time, user.Location()),
+			Start:       pt.timezoneTime.Clock(),
 		},
 		pt.smallestPeriod,
 		pt.biggestPeriod,
@@ -549,7 +537,7 @@ func (pt *PeriodicTask) HandleBtnTaskChosen(ctx context.Context, b *bot.Bot, msg
 	}
 
 	pt.id = task.ID
-	pt.time = time.Time{}.Add(task.Start).In(user.Location())
+	pt.timezoneTime = timezone.New(time.Time{}, task.Start, user.Location())
 	pt.text = task.Text
 	pt.description = task.Description
 	pt.isWorkflow = false

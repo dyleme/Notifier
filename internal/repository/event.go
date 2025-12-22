@@ -76,6 +76,7 @@ func (r *EventsRepository) ListNotSent(
 				NextSending:        e.NextSending,
 				Text:               e.Text,
 				TgID:               int(e.TgID),
+				OriginalSending:    e.OriginalSending,
 				NotificationPeriod: time.Duration(e.NotificationRetryPeriodS) * time.Second,
 				TaskID:             int(e.TaskID),
 				Descriptions:       e.Description,

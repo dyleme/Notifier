@@ -145,7 +145,7 @@ SELECT id, created_at, text, description, user_id, type, start, event_creation_p
 FROM tasks
 WHERE user_id = ?
   AND type = ?
-ORDER BY id DESC
+ORDER BY id
 LIMIT ? OFFSET ?
 `
 

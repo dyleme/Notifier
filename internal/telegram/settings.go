@@ -11,6 +11,7 @@ import (
 	inKbr "github.com/go-telegram/ui/keyboard/inline"
 
 	"github.com/dyleme/Notifier/internal/domain"
+	"github.com/dyleme/Notifier/internal/telegram/timezone"
 )
 
 func (th *Handler) SettingsInline(ctx context.Context, b *bot.Bot, msg *models.Message, _ []byte) error {
@@ -120,12 +121,13 @@ func (ts *TimezoneSettings) HandleMsgSetTime(ctx context.Context, b *bot.Bot, ms
 		return fmt.Errorf(op, err)
 	}
 
-	userTime, err := parseTime(msg.Text, user.Location())
+	ttz := timezone.NewEmpty(user.Location())
+	err = ttz.SetClock(msg.Text)
 	if err != nil {
 		return fmt.Errorf(op, err)
 	}
 
-	h, m, _ := userTime.Clock()
+	h, m, _ := ttz.Time().Clock()
 	ts.zone = getTimezone(time.Now().In(time.UTC), h, m)
 
 	err = ts.EditMenuMsg(ctx, b, relatedMsgID, msg.Chat.ID)
